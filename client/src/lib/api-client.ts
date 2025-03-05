@@ -1,3 +1,4 @@
+import { apiRequest } from "./queryClient";
 import { Provider } from "@shared/schema";
 
 export interface ModelInfo {
@@ -83,6 +84,18 @@ export async function listModels(provider: Provider): Promise<ModelInfo[]> {
       const ollamaData = await ollamaRes.json();
       return ollamaData.models.map((model: any) => ({
         id: model.name,
+        name: model.name,
+        provider
+      }));
+
+    case "lmstudio":
+      const lmStudioRes = await fetch("/api/lmstudio/models");
+      if (!lmStudioRes.ok) {
+        throw new Error("Failed to fetch LM Studio models");
+      }
+      const lmStudioData = await lmStudioRes.json();
+      return lmStudioData.models.map((model: any) => ({
+        id: model.id,
         name: model.name,
         provider
       }));
@@ -175,45 +188,83 @@ export async function generateCompletion(
 async function streamMistralResponse(response: Response, onChunk: (chunk: ChatCompletionResponse) => void) {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
+  let accumulatedContent = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        if (accumulatedContent) {
+          onChunk({ content: accumulatedContent, done: true });
+        }
+        break;
+      }
 
-    const chunk = decoder.decode(value);
-    const lines = chunk.split("\n").filter(Boolean);
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n").filter(Boolean);
 
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = JSON.parse(line.slice(6));
-        onChunk({
-          content: data.choices[0]?.delta?.content || "",
-          done: data.choices[0]?.finish_reason === "stop"
-        });
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            const content = data.choices[0]?.delta?.content || "";
+            if (content) {
+              accumulatedContent += content;
+              onChunk({
+                content,
+                done: data.choices[0]?.finish_reason === "stop"
+              });
+            }
+          } catch (e) {
+            console.warn("Failed to parse chunk:", e);
+          }
+        }
       }
     }
+  } catch (error) {
+    console.error("Stream processing error:", error);
+    throw error;
   }
 }
 
 async function streamOpenRouterResponse(response: Response, onChunk: (chunk: ChatCompletionResponse) => void) {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
+  let accumulatedContent = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        if (accumulatedContent) {
+          onChunk({ content: accumulatedContent, done: true });
+        }
+        break;
+      }
 
-    const chunk = decoder.decode(value);
-    const lines = chunk.split("\n").filter(Boolean);
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n").filter(Boolean);
 
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = JSON.parse(line.slice(6));
-        onChunk({
-          content: data.choices[0]?.delta?.content || "",
-          done: data.choices[0]?.finish_reason === "stop"
-        });
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            const content = data.choices[0]?.delta?.content || "";
+            if (content) {
+              accumulatedContent += content;
+              onChunk({
+                content,
+                done: data.choices[0]?.finish_reason === "stop"
+              });
+            }
+          } catch (e) {
+            console.warn("Failed to parse chunk:", e);
+          }
+        }
       }
     }
+  } catch (error) {
+    console.error("Stream processing error:", error);
+    throw error;
   }
 }

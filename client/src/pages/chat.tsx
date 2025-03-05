@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Settings2, Menu, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OllamaConfig } from "@/components/chat/ollama-config";
+import { useChatHistory } from "@/hooks/use-chat-history";
 
 export default function Chat() {
   const [provider, setProvider] = useState<Provider>("mistral");
@@ -28,6 +29,11 @@ export default function Chat() {
 
   const { data: messages = [] } = useQuery<Message[]>({
     queryKey: ["/api/messages"],
+  });
+
+  // Initialize chat history from localStorage
+  useChatHistory(messages, (loadedMessages) => {
+    queryClient.setQueryData(["/api/messages"], loadedMessages);
   });
 
   const addMessage = useMutation({
@@ -47,6 +53,7 @@ export default function Chat() {
 
   const clearMessages = useMutation({
     mutationFn: async () => {
+      localStorage.removeItem("chat_history"); // Clear local storage as well
       return apiRequest("POST", "/api/messages/clear");
     },
     onSuccess: () => {
