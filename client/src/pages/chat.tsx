@@ -11,12 +11,14 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Settings2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { OllamaConfig } from "@/components/chat/ollama-config";
 
 export default function Chat() {
   const [selectedModel, setSelectedModel] = useState("llama2");
   const [temperature, setTemperature] = useState(0.7);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -110,8 +112,17 @@ export default function Chat() {
 
   return (
     <div className="container mx-auto max-w-4xl p-4 flex flex-col h-screen">
+      <OllamaConfig onConnectionChange={setIsConnected} />
+
       <div className="flex justify-between items-center mb-4">
-        <ModelSelect value={selectedModel} onChange={setSelectedModel} />
+        <div className="flex items-center gap-4">
+          <ModelSelect value={selectedModel} onChange={setSelectedModel} />
+          {isConnected && (
+            <p className="text-sm text-muted-foreground">
+              Connected to Ollama
+            </p>
+          )}
+        </div>
         <div className="flex gap-2">
           <Sheet>
             <SheetTrigger asChild>
@@ -142,10 +153,12 @@ export default function Chat() {
       <div className="flex-1 overflow-y-auto mb-4 space-y-4">
         {messages.length === 0 && (
           <div className="text-center text-muted-foreground pt-8">
-            <p>Start a conversation with your local Ollama model.</p>
-            <p className="text-sm mt-2">
-              Make sure Ollama is installed and running locally.
-            </p>
+            <p>Start a conversation with your Ollama model.</p>
+            {!isConnected && (
+              <p className="text-sm mt-2">
+                Please configure your Ollama connection above.
+              </p>
+            )}
           </div>
         )}
         {messages.map((message) => (
@@ -164,7 +177,7 @@ export default function Chat() {
         )}
       </div>
 
-      <ChatInput onSubmit={handleSubmit} disabled={isGenerating} />
+      <ChatInput onSubmit={handleSubmit} disabled={isGenerating || !isConnected} />
     </div>
   );
 }

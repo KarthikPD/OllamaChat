@@ -4,6 +4,8 @@ import { storage } from "./storage";
 import { insertMessageSchema, insertParamsSchema } from "@shared/schema";
 import { z } from "zod";
 
+let ollamaHost = "http://localhost:11434";
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
@@ -49,10 +51,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(params);
   });
 
+  // Check Ollama connection and set host
+  app.post("/api/ollama/check-connection", async (req, res) => {
+    const { hostUrl } = req.body;
+    try {
+      const response = await fetch(`${hostUrl}/api/tags`);
+      if (!response.ok) {
+        throw new Error(`Ollama API returned ${response.status}`);
+      }
+      ollamaHost = hostUrl; // Update the host URL if connection successful
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Ollama API Error:", error);
+      res.status(500).json({ 
+        error: "Failed to connect to Ollama API",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // List Ollama models
   app.get("/api/ollama/models", async (_req, res) => {
     try {
-      const response = await fetch("http://localhost:11434/api/tags");
+      const response = await fetch(`${ollamaHost}/api/tags`);
       if (!response.ok) {
         throw new Error(`Ollama API returned ${response.status}`);
       }
@@ -70,7 +91,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate completion from Ollama
   app.post("/api/ollama/generate", async (req, res) => {
     try {
-      const response = await fetch("http://localhost:11434/api/generate", {
+      const response = await fetch(`${ollamaHost}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(req.body)
