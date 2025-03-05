@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChatMessage } from "@/components/chat/chat-message";
 import { ChatInput } from "@/components/chat/chat-input";
 import { ModelSelect } from "@/components/chat/model-select";
+import { ProviderSelect } from "@/components/chat/provider-select";
 import { ParameterControls } from "@/components/chat/parameter-controls";
-import { generateCompletion } from "@/lib/ollama";
+import { generateCompletion } from "@/lib/api-client";
 import { apiRequest } from "@/lib/queryClient";
-import { Message, messageRoleSchema } from "@shared/schema";
+import { Message, messageRoleSchema, Provider } from "@shared/schema";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Settings2, Trash2 } from "lucide-react";
@@ -14,11 +15,12 @@ import { useToast } from "@/hooks/use-toast";
 import { OllamaConfig } from "@/components/chat/ollama-config";
 
 export default function Chat() {
-  const [selectedModel, setSelectedModel] = useState("llama2");
+  const [provider, setProvider] = useState<Provider>("mistral");
+  const [selectedModel, setSelectedModel] = useState("mistral-small");
   const [temperature, setTemperature] = useState(0.7);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+  const [isOllamaConnected, setIsOllamaConnected] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -33,6 +35,7 @@ export default function Chat() {
         ...message,
         role: parsedRole,
         modelId: selectedModel,
+        provider
       });
     },
     onSuccess: () => {
@@ -54,6 +57,13 @@ export default function Chat() {
 
   const handleSubmit = async (content: string) => {
     if (isGenerating) return;
+    if (provider === "ollama" && !isOllamaConnected) {
+      toast({
+        variant: "destructive",
+        description: "Please configure your Ollama connection first"
+      });
+      return;
+    }
 
     try {
       // Add user message
@@ -62,18 +72,23 @@ export default function Chat() {
       setIsGenerating(true);
       let assistantMessage = "";
 
+      // Prepare messages array including system prompt if present
+      const messages = [];
+      if (systemPrompt) {
+        messages.push({ role: "system", content: systemPrompt });
+      }
+      messages.push({ role: "user", content });
+
       await generateCompletion(
+        provider,
         {
           model: selectedModel,
-          prompt: content,
-          system: systemPrompt,
+          messages,
+          temperature,
           stream: true,
-          options: {
-            temperature,
-          },
         },
         (chunk) => {
-          assistantMessage += chunk.response;
+          assistantMessage += chunk.content;
           // Update the message in real-time
           queryClient.setQueryData(["/api/messages"], (old: Message[] = []) => {
             const updated = [...old];
@@ -86,6 +101,7 @@ export default function Chat() {
                 role: "assistant",
                 content: assistantMessage,
                 modelId: selectedModel,
+                provider,
                 timestamp: new Date(),
               });
             }
@@ -103,21 +119,33 @@ export default function Chat() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to generate response. Make sure Ollama is running locally.",
+        description: provider === "ollama"
+          ? "Failed to generate response. Make sure Ollama is running locally."
+          : `Failed to generate response from ${provider}. Please check your API key.`,
       });
     } finally {
       setIsGenerating(false);
     }
   };
 
+  const showOllamaConfig = provider === "ollama";
+  const isProviderReady = provider !== "ollama" || isOllamaConnected;
+
   return (
     <div className="container mx-auto max-w-4xl p-4 flex flex-col h-screen">
-      <OllamaConfig onConnectionChange={setIsConnected} />
+      {showOllamaConfig && (
+        <OllamaConfig onConnectionChange={setIsOllamaConnected} />
+      )}
 
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
-          <ModelSelect value={selectedModel} onChange={setSelectedModel} />
-          {isConnected && (
+          <ProviderSelect value={provider} onChange={setProvider} />
+          <ModelSelect 
+            provider={provider}
+            value={selectedModel}
+            onChange={setSelectedModel}
+          />
+          {provider === "ollama" && isOllamaConnected && (
             <p className="text-sm text-muted-foreground">
               Connected to Ollama
             </p>
@@ -153,10 +181,12 @@ export default function Chat() {
       <div className="flex-1 overflow-y-auto mb-4 space-y-4">
         {messages.length === 0 && (
           <div className="text-center text-muted-foreground pt-8">
-            <p>Start a conversation with your Ollama model.</p>
-            {!isConnected && (
+            <p>Start a conversation with your AI model.</p>
+            {!isProviderReady && (
               <p className="text-sm mt-2">
-                Please configure your Ollama connection above.
+                {provider === "ollama" 
+                  ? "Please configure your Ollama connection above."
+                  : "Please ensure your API key is configured correctly."}
               </p>
             )}
           </div>
@@ -177,7 +207,7 @@ export default function Chat() {
         )}
       </div>
 
-      <ChatInput onSubmit={handleSubmit} disabled={isGenerating || !isConnected} />
+      <ChatInput onSubmit={handleSubmit} disabled={isGenerating || !isProviderReady} />
     </div>
   );
 }
