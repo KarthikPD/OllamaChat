@@ -38,5 +38,5 @@ export type InsertModelParams = z.infer<typeof insertParamsSchema>;
 export const messageRoleSchema = z.enum(["user", "assistant", "system"]);
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 
-export const providerSchema = z.enum(["ollama", "mistral", "openrouter"]);
+export const providerSchema = z.enum(["ollama", "lmstudio", "mistral", "openrouter"]);
 export type Provider = z.infer<typeof providerSchema>;

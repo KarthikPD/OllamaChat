@@ -5,6 +5,7 @@ import { insertMessageSchema, insertParamsSchema } from "@shared/schema";
 import { z } from "zod";
 
 let ollamaHost = "http://localhost:11434";
+let lmStudioHost = "http://localhost:1234";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -65,6 +66,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Ollama API Error:", error);
       res.status(500).json({ 
         error: "Failed to connect to Ollama API",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Check LM Studio connection and set host
+  app.post("/api/lmstudio/check-connection", async (req, res) => {
+    const { hostUrl } = req.body;
+    try {
+      const response = await fetch(`${hostUrl}/v1/models`);
+      if (!response.ok) {
+        throw new Error(`LM Studio API returned ${response.status}`);
+      }
+      lmStudioHost = hostUrl; // Update the host URL if connection successful
+      res.json({ success: true });
+    } catch (error) {
+      console.error("LM Studio API Error:", error);
+      res.status(500).json({ 
+        error: "Failed to connect to LM Studio API",
         details: error instanceof Error ? error.message : "Unknown error"
       });
     }
