@@ -49,25 +49,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(params);
   });
 
-  // Proxy Ollama API requests
-  app.post("/api/ollama/:endpoint", async (req, res) => {
+  // List Ollama models
+  app.get("/api/ollama/models", async (_req, res) => {
     try {
-      const response = await fetch(`http://localhost:11434/api/${req.params.endpoint}`, {
+      const response = await fetch("http://localhost:11434/api/tags");
+      if (!response.ok) {
+        throw new Error(`Ollama API returned ${response.status}`);
+      }
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error("Ollama API Error:", error);
+      res.status(500).json({ 
+        error: "Failed to connect to Ollama API",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Generate completion from Ollama
+  app.post("/api/ollama/generate", async (req, res) => {
+    try {
+      const response = await fetch("http://localhost:11434/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(req.body)
       });
 
+      if (!response.ok) {
+        throw new Error(`Ollama API returned ${response.status}`);
+      }
+
       if (response.headers.get("content-type")?.includes("text/event-stream")) {
         res.setHeader("Content-Type", "text/event-stream");
 
-        // Handle streaming response with proper types
         const reader = response.body?.getReader();
         if (!reader) {
           throw new Error("Failed to get response reader");
         }
 
-        // Stream the response chunks
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;

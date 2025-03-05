@@ -33,7 +33,7 @@ export interface GenerateParams {
 }
 
 export async function listModels(): Promise<OllamaModel[]> {
-  const res = await apiRequest("POST", "/api/ollama/list");
+  const res = await apiRequest("GET", "/api/ollama/models");
   const data = await res.json();
   return data.models;
 }
@@ -51,7 +51,7 @@ export async function generateCompletion(params: GenerateParams, onChunk?: (chun
 
       const chunk = decoder.decode(value);
       const lines = chunk.split("\n").filter(Boolean);
-      
+
       for (const line of lines) {
         try {
           const response = JSON.parse(line) as OllamaResponse;
