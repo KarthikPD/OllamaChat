@@ -20,35 +20,38 @@ export function ChatMessage({ role, content, isLoading }: ChatMessageProps) {
       <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md border bg-background">
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
-      <Card className={cn(
-        "flex-1 px-4 py-3",
-        isUser ? "bg-primary text-primary-foreground" : "",
-        isLoading && "animate-pulse"
-      )}>
-        <ReactMarkdown
-          className="prose dark:prose-invert max-w-none"
-          components={{
-            code({ node, inline, className, children, ...props }) {
-              const match = /language-(\w+)/.exec(className || "");
-              return !inline && match ? (
-                <SyntaxHighlighter
-                  style={vscDarkPlus}
-                  language={match[1]}
-                  PreTag="div"
-                  {...props}
-                >
-                  {String(children).replace(/\n$/, "")}
-                </SyntaxHighlighter>
-              ) : (
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              );
-            },
-          }}
-        >
-          {content}
-        </ReactMarkdown>
+      <Card 
+        className={cn(
+          "flex-1 px-4 py-3",
+          isUser ? "bg-primary text-primary-foreground" : "",
+          isLoading && "animate-pulse"
+        )}
+      >
+        <div className="prose dark:prose-invert max-w-none">
+          <ReactMarkdown
+            components={{
+              code({ node, inline, className, children, ...props }) {
+                const match = /language-(\w+)/.exec(className || "");
+                return !inline && match ? (
+                  <SyntaxHighlighter
+                    style={vscDarkPlus}
+                    language={match[1]}
+                    PreTag="div"
+                    {...props}
+                  >
+                    {String(children).replace(/\n$/, "")}
+                  </SyntaxHighlighter>
+                ) : (
+                  <code {...props} className={className}>
+                    {children}
+                  </code>
+                );
+              },
+            }}
+          >
+            {content}
+          </ReactMarkdown>
+        </div>
       </Card>
     </div>
   );
