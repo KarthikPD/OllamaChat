@@ -24,6 +24,7 @@ export default function Chat() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isOllamaConnected, setIsOllamaConnected] = useState(false);
   const [showAPISettings, setShowAPISettings] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState<Message | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -86,6 +87,17 @@ export default function Chat() {
       }
       messages.push({ role: "user", content });
 
+      // Create a temporary message for streaming
+      const tempMessage: Message = {
+        id: Date.now(),
+        role: "assistant",
+        content: "",
+        modelId: selectedModel,
+        provider,
+        timestamp: new Date(),
+      };
+      setStreamingMessage(tempMessage);
+
       await generateCompletion(
         provider,
         {
@@ -96,31 +108,17 @@ export default function Chat() {
         },
         (chunk) => {
           assistantMessage += chunk.content;
-          queryClient.setQueryData(["/api/messages"], (old: Message[] = []) => {
-            const updated = [...old];
-            const last = updated[updated.length - 1];
-            if (last?.role === "assistant") {
-              last.content = assistantMessage;
-            } else {
-              updated.push({
-                id: Date.now(),
-                role: "assistant",
-                content: assistantMessage,
-                modelId: selectedModel,
-                provider,
-                timestamp: new Date(),
-              });
-            }
-            return updated;
-          });
+          setStreamingMessage(prev => prev ? { ...prev, content: assistantMessage } : null);
         }
       );
 
+      setStreamingMessage(null);
       await addMessage.mutateAsync({
         role: "assistant",
         content: assistantMessage,
       });
     } catch (error) {
+      setStreamingMessage(null);
       toast({
         variant: "destructive",
         title: "Error",
@@ -135,6 +133,12 @@ export default function Chat() {
 
   const showOllamaConfig = provider === "ollama";
   const isProviderReady = provider !== "ollama" || isOllamaConnected;
+
+  // Combine permanent messages with streaming message
+  const displayMessages = [...messages];
+  if (streamingMessage) {
+    displayMessages.push(streamingMessage);
+  }
 
   return (
     <div className="container mx-auto max-w-4xl p-4 flex flex-col h-screen">
@@ -195,7 +199,7 @@ export default function Chat() {
       </div>
 
       <div className="flex-1 overflow-y-auto mb-4 space-y-4">
-        {messages.length === 0 && (
+        {displayMessages.length === 0 && (
           <div className="text-center text-muted-foreground pt-8">
             <p>Start a conversation with your AI model.</p>
             {!isProviderReady && (
@@ -207,20 +211,14 @@ export default function Chat() {
             )}
           </div>
         )}
-        {messages.map((message) => (
+        {displayMessages.map((message) => (
           <ChatMessage
             key={message.id}
             role={messageRoleSchema.parse(message.role)}
             content={message.content}
+            isLoading={streamingMessage?.id === message.id}
           />
         ))}
-        {isGenerating && (
-          <ChatMessage
-            role="assistant"
-            content="▋"
-            isLoading
-          />
-        )}
       </div>
 
       <ChatInput onSubmit={handleSubmit} disabled={isGenerating || !isProviderReady} />
