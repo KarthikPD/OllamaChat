@@ -24,7 +24,7 @@ export default function Chat() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isOllamaConnected, setIsOllamaConnected] = useState(false);
   const [showAPISettings, setShowAPISettings] = useState(false);
-  const [streamingMessage, setStreamingMessage] = useState<Message | null>(null);
+  const [currentAssistantMessage, setCurrentAssistantMessage] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -79,24 +79,13 @@ export default function Chat() {
       await addMessage.mutateAsync({ role: "user", content });
 
       setIsGenerating(true);
-      let assistantMessage = "";
+      setCurrentAssistantMessage("");
 
       const messages = [];
       if (systemPrompt) {
         messages.push({ role: "system", content: systemPrompt });
       }
       messages.push({ role: "user", content });
-
-      // Create a temporary message for streaming
-      const tempMessage: Message = {
-        id: Date.now(),
-        role: "assistant",
-        content: "",
-        modelId: selectedModel,
-        provider,
-        timestamp: new Date(),
-      };
-      setStreamingMessage(tempMessage);
 
       await generateCompletion(
         provider,
@@ -107,18 +96,16 @@ export default function Chat() {
           stream: true,
         },
         (chunk) => {
-          assistantMessage += chunk.content;
-          setStreamingMessage(prev => prev ? { ...prev, content: assistantMessage } : null);
+          setCurrentAssistantMessage(prev => prev + chunk.content);
         }
       );
 
-      setStreamingMessage(null);
       await addMessage.mutateAsync({
         role: "assistant",
-        content: assistantMessage,
+        content: currentAssistantMessage,
       });
+      setCurrentAssistantMessage("");
     } catch (error) {
-      setStreamingMessage(null);
       toast({
         variant: "destructive",
         title: "Error",
@@ -134,10 +121,17 @@ export default function Chat() {
   const showOllamaConfig = provider === "ollama";
   const isProviderReady = provider !== "ollama" || isOllamaConnected;
 
-  // Combine permanent messages with streaming message
+  // Combine permanent messages with current assistant message if it exists
   const displayMessages = [...messages];
-  if (streamingMessage) {
-    displayMessages.push(streamingMessage);
+  if (currentAssistantMessage) {
+    displayMessages.push({
+      id: Date.now(),
+      role: "assistant",
+      content: currentAssistantMessage,
+      modelId: selectedModel,
+      provider,
+      timestamp: new Date(),
+    });
   }
 
   return (
@@ -198,7 +192,7 @@ export default function Chat() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto mb-4 space-y-4">
+      <div className="flex-1 overflow-y-auto mb-4 space-y-4 min-h-[200px] relative">
         {displayMessages.length === 0 && (
           <div className="text-center text-muted-foreground pt-8">
             <p>Start a conversation with your AI model.</p>
@@ -211,14 +205,16 @@ export default function Chat() {
             )}
           </div>
         )}
-        {displayMessages.map((message) => (
-          <ChatMessage
-            key={message.id}
-            role={messageRoleSchema.parse(message.role)}
-            content={message.content}
-            isLoading={streamingMessage?.id === message.id}
-          />
-        ))}
+        <div className="space-y-4">
+          {displayMessages.map((message) => (
+            <ChatMessage
+              key={message.id}
+              role={messageRoleSchema.parse(message.role)}
+              content={message.content}
+              isLoading={isGenerating && message === displayMessages[displayMessages.length - 1]}
+            />
+          ))}
+        </div>
       </div>
 
       <ChatInput onSubmit={handleSubmit} disabled={isGenerating || !isProviderReady} />
