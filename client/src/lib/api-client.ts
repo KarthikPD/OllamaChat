@@ -34,50 +34,16 @@ const MODEL_NAMES: Record<string, string> = {
   "google/palm-2-chat-bison": "PaLM 2 Bison",
 };
 
-async function streamMistralResponse(response: Response, onChunk: (chunk: ChatCompletionResponse) => void) {
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value);
-    const lines = chunk.split("\n").filter(Boolean);
-
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = JSON.parse(line.slice(6));
-        onChunk({
-          content: data.choices[0]?.delta?.content || "",
-          done: data.choices[0]?.finish_reason === "stop"
-        });
-      }
-    }
-  }
+async function getMistralKey(): Promise<string> {
+  const key = localStorage.getItem("MISTRAL_API_KEY");
+  if (!key) throw new Error("Mistral API key not found. Please configure it in the menu.");
+  return key;
 }
 
-async function streamOpenRouterResponse(response: Response, onChunk: (chunk: ChatCompletionResponse) => void) {
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value);
-    const lines = chunk.split("\n").filter(Boolean);
-
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = JSON.parse(line.slice(6));
-        onChunk({
-          content: data.choices[0]?.delta?.content || "",
-          done: data.choices[0]?.finish_reason === "stop"
-        });
-      }
-    }
-  }
+async function getOpenRouterKey(): Promise<string> {
+  const key = localStorage.getItem("OPENROUTER_API_KEY");
+  if (!key) throw new Error("OpenRouter API key not found. Please configure it in the menu.");
+  return key;
 }
 
 export async function listModels(provider: Provider): Promise<ModelInfo[]> {
@@ -89,27 +55,27 @@ export async function listModels(provider: Provider): Promise<ModelInfo[]> {
         { id: "mistral-small", name: "Mistral Small", provider },
         { id: "mistral-medium", name: "Mistral Medium", provider },
       ];
-    
+
     case "openrouter":
+      const openRouterKey = await getOpenRouterKey();
       const response = await fetch(`${OPENROUTER_API_URL}/models`, {
         headers: {
-          "Authorization": `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+          "Authorization": `Bearer ${openRouterKey}`
         }
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to fetch OpenRouter models");
       }
-      
+
       const data = await response.json();
       return data.data.map((model: any) => ({
         id: model.id,
         name: MODEL_NAMES[model.id] || model.name,
         provider
       }));
-    
+
     case "ollama":
-      // Keep existing Ollama implementation
       const ollamaRes = await fetch("/api/ollama/models");
       if (!ollamaRes.ok) {
         throw new Error("Failed to fetch Ollama models");
@@ -120,7 +86,7 @@ export async function listModels(provider: Provider): Promise<ModelInfo[]> {
         name: model.name,
         provider
       }));
-    
+
     default:
       throw new Error(`Unsupported provider: ${provider}`);
   }
@@ -132,14 +98,14 @@ export async function generateCompletion(
   onChunk?: (chunk: ChatCompletionResponse) => void
 ) {
   let response: Response;
-  
+
   switch (provider) {
     case "mistral":
       response = await fetch(`${MISTRAL_API_URL}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${import.meta.env.VITE_MISTRAL_API_KEY}`
+          "Authorization": `Bearer ${await getMistralKey()}`
         },
         body: JSON.stringify({
           model: options.model,
@@ -156,7 +122,7 @@ export async function generateCompletion(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`
+          "Authorization": `Bearer ${await getOpenRouterKey()}`
         },
         body: JSON.stringify({
           model: options.model,
@@ -203,5 +169,51 @@ export async function generateCompletion(
       content: data.choices[0]?.message?.content || "",
       done: true
     };
+  }
+}
+
+async function streamMistralResponse(response: Response, onChunk: (chunk: ChatCompletionResponse) => void) {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value);
+    const lines = chunk.split("\n").filter(Boolean);
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = JSON.parse(line.slice(6));
+        onChunk({
+          content: data.choices[0]?.delta?.content || "",
+          done: data.choices[0]?.finish_reason === "stop"
+        });
+      }
+    }
+  }
+}
+
+async function streamOpenRouterResponse(response: Response, onChunk: (chunk: ChatCompletionResponse) => void) {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value);
+    const lines = chunk.split("\n").filter(Boolean);
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = JSON.parse(line.slice(6));
+        onChunk({
+          content: data.choices[0]?.delta?.content || "",
+          done: data.choices[0]?.finish_reason === "stop"
+        });
+      }
+    }
   }
 }

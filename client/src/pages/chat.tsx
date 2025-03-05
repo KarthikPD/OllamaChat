@@ -5,12 +5,13 @@ import { ChatInput } from "@/components/chat/chat-input";
 import { ModelSelect } from "@/components/chat/model-select";
 import { ProviderSelect } from "@/components/chat/provider-select";
 import { ParameterControls } from "@/components/chat/parameter-controls";
+import { APISettings } from "@/components/menu/api-settings";
 import { generateCompletion } from "@/lib/api-client";
 import { apiRequest } from "@/lib/queryClient";
 import { Message, messageRoleSchema, Provider } from "@shared/schema";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Settings2, Trash2 } from "lucide-react";
+import { Settings2, Menu, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OllamaConfig } from "@/components/chat/ollama-config";
 
@@ -21,6 +22,7 @@ export default function Chat() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isOllamaConnected, setIsOllamaConnected] = useState(false);
+  const [showAPISettings, setShowAPISettings] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -66,13 +68,11 @@ export default function Chat() {
     }
 
     try {
-      // Add user message
       await addMessage.mutateAsync({ role: "user", content });
 
       setIsGenerating(true);
       let assistantMessage = "";
 
-      // Prepare messages array including system prompt if present
       const messages = [];
       if (systemPrompt) {
         messages.push({ role: "system", content: systemPrompt });
@@ -89,7 +89,6 @@ export default function Chat() {
         },
         (chunk) => {
           assistantMessage += chunk.content;
-          // Update the message in real-time
           queryClient.setQueryData(["/api/messages"], (old: Message[] = []) => {
             const updated = [...old];
             const last = updated[updated.length - 1];
@@ -110,7 +109,6 @@ export default function Chat() {
         }
       );
 
-      // Save the final assistant message
       await addMessage.mutateAsync({
         role: "assistant",
         content: assistantMessage,
@@ -139,6 +137,17 @@ export default function Chat() {
 
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Menu className="h-4 w-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left">
+              <h3 className="text-lg font-semibold mb-4">API Configuration</h3>
+              <APISettings onSave={() => setShowAPISettings(false)} />
+            </SheetContent>
+          </Sheet>
           <ProviderSelect value={provider} onChange={setProvider} />
           <ModelSelect 
             provider={provider}
